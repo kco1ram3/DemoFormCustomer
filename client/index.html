@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title>Customer Management</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css">
+    <style type="text/css">
+        .loading {
+            display: block;
+            position: absolute;
+            z-index: 1000;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 100%;
+            background: rgba(255, 255, 255, .8) url('http://smallenvelop.com/wp-content/uploads/2014/08/Preloader_21.gif') 50% 50% no-repeat;
+        }
+    </style>
+    <script src="https://fb.me/react-15.0.1.min.js"></script>
+    <script src="https://fb.me/react-dom-15.0.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.24/browser.min.js"></script>
+</head>
+<body>
+    <div style="position: relative;">
+        <div id="customerLoading" class="loading"></div>
+        <div id="container"></div>
+    </div>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.2/jquery.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+    <script type="text/javascript">
+        $(window).bind("load", function() {
+            $('#customerLoading').fadeOut(1000);
+        });
+    </script>
+    <script type="text/babel">
+        var ButtonControl = React.createClass({
+            render: function() {
+                return <button type='button' className='btn btn-primary' onClick={this.props.onClick}>{this.props.text}</button>;
+            }
+        });
+
+        var TextBoxControl = React.createClass({
+            getInitialState: function() {
+                return {value: this.props.value};
+            },
+            handleChange: function(event) {
+                this.setState({value: event.target.value});
+            },
+            render: function() {
+                return <input type='text' className='form-control' placeholder={this.props.placeholder} value={this.state.value} onChange={this.handleChange} />;
+            }
+        });
+
+        var TableDataHeader = React.createClass({
+            render: function() {
+                var columnsHeader = this.props.columns.map(function (column) {
+                    return (
+                            <th className='text-center'>{column.headerText}</th>
+                    );
+                });
+                return <thead><tr>{columnsHeader}</tr></thead>;
+            }
+        });
+
+        var TableDataItem = React.createClass({
+            getInitialState: function() {
+                return {data: this.props.source || []};
+            },
+            componentDidMount: function() {
+                var source = this.props.source || [];
+                if (source.length == 0 && (this.props.selectApi || '') != '') {
+                    $.ajax({
+                        url: this.props.selectApi,
+                        dataType: 'json',
+                        type: "GET",
+                        async: false,
+                        cache: false,
+                        success: function(response) {
+                            this.setState({data: response});
+                        }.bind(this),
+                        error: function(xhr, status, err) {
+                            console.error(this.props.selectApi, status, err.toString());
+                        }.bind(this)
+                    });
+                }
+            },
+            componentDidUpdate: function() {
+                for (var c = 0; c < this.props.columns.length; c++) {
+                    if (this.props.columns[c].columnName || null != null) {
+                        var control = ReactDOM.findDOMNode(eval('this.refs.' + this.props.columns[c].columnName + '_Add'));
+                        control.value = '';
+                    }
+                }
+            },
+            editForm: function(index, setEdit) {
+                this.state.data[index].setEdit = !setEdit;
+                this.setState({data: this.state.data});
+            },
+            handleAddItem: function() {
+                var isValid = false;
+                var confirmMessage = this.props.confirmInsert || '';
+                if (confirmMessage != '') {
+                    isValid = confirm(confirmMessage);
+                } else {
+                    isValid = true;
+                }
+                if (!isValid) {
+                    return;
+                }
+                var data = {};
+                for (var c = 0; c < this.props.columns.length; c++) {
+                    if (this.props.columns[c].columnName || null != null) {
+                        var control = ReactDOM.findDOMNode(eval('this.refs.' + this.props.columns[c].columnName + '_Add'));
+                        eval('data.' + this.props.columns[c].columnName + ' = "' + control.value + '"');
+                    }
+                }
+
+                var self = this;
+                $('#customerLoading').show();
+                $.ajax({
+                    url: this.props.insertApi,
+                    data: data,
+                    dataType: 'json',
+                    type: "POST",
+                    async: false,
+                    cache: false,
+                    success: function(response) {
+                        self.state.data.push(response);
+                        self.setState({data: self.state.data});
+                        $('#customerLoading').fadeOut(1000);
+                    }.bind(this),
+                    error: function(xhr, status, err) {
+                        console.error(this.props.insertApi, status, err.toString());
+                    }.bind(this)
+                });
+            },
+            handleEditItem: function(key) {
+                var isValid = false;
+                var confirmMessage = this.props.confirmUpdate || '';
+                if (confirmMessage != '') {
+                    isValid = confirm(confirmMessage);
+                } else {
+                    isValid = true;
+                }
+                if (!isValid) {
+                    return;
+                }
+                var index = null;
+                this.state.data.map(function (d, i) {
+                    if (d._id == key) {
+                        index = i;
+                    }
+                });
+                var data = this.state.data[index];
+                for (var c = 0; c < this.props.columns.length; c++) {
+                    if (this.props.columns[c].columnName || null != null) {
+                        var control = ReactDOM.findDOMNode(eval('this.refs.' + this.props.columns[c].columnName + '_' + index));
+                        eval('data.' + this.props.columns[c].columnName + ' = "' + control.value + '"');
+                    }
+                }
+
+                var self = this;
+                $('#customerLoading').show();
+                $.ajax({
+                    url: this.props.updateApi + '/' + key,
+                    data: data,
+                    dataType: 'json',
+                    type: "PUT",
+                    async: false,
+                    cache: false,
+                    success: function(response) {
+                        self.state.data[index] = response;
+                        self.setState({data: self.state.data});
+                        $('#customerLoading').fadeOut(1000);
+                    }.bind(this),
+                    error: function(xhr, status, err) {
+                        console.error(this.props.updateApi, status, err.toString());
+                    }.bind(this)
+                });
+            },
+            handleDeleteItem: function(key) {
+                var isValid = false;
+                var confirmMessage = this.props.confirmDelete || '';
+                if (confirmMessage != '') {
+                    isValid = confirm(confirmMessage);
+                } else {
+                    isValid = true;
+                }
+                if (!isValid) {
+                    return;
+                }
+                var index = null;
+                this.state.data.map(function (d, i) {
+                    if (d._id == key) {
+                        index = i;
+                    }
+                });
+
+                var self = this;
+                $('#customerLoading').show();
+                $.ajax({
+                    url: this.props.deleteApi + '/' + key,
+                    dataType: 'json',
+                    type: "DELETE",
+                    async: false,
+                    cache: false,
+                    success: function(response) {
+                        self.state.data.splice(index, 1);
+                        self.setState({data: self.state.data});
+                        $('#customerLoading').fadeOut(1000);
+                    }.bind(this),
+                    error: function(xhr, status, err) {
+                        console.error(this.props.deleteApi, status, err.toString());
+                    }.bind(this)
+                });
+            },
+            render: function() {
+                var rowAdd = [];
+                if (this.props.isAdd) {
+                    var columnsItems = [];
+                    for (var c = 0; c < this.props.columns.length; c++) {
+                        if (this.props.columns[c].columnName || null != null) {
+                            columnsItems.push(<td>{<TextBoxControl ref={this.props.columns[c].columnName + '_Add'} placeholder={this.props.columns[c].placeholder} />}</td>);
+                        }
+                    }
+                    columnsItems.push(<td className='text-center'>{<ButtonControl text='เพิ่ม' onClick={this.handleAddItem} />}</td>);
+                    rowAdd.push(<tr><td></td>{columnsItems}</tr>);
+                }
+                var rowsItems = [];
+                for (var index = 0; index < this.state.data.length; index++) {
+                    var setEdit = this.state.data[index].setEdit || false;
+                    var columnsItems = [];
+                    columnsItems.push(<td className='text-center'>{index + 1}</td>);
+                    for (var c = 0; c < this.props.columns.length; c++) {
+                        if (this.props.columns[c].columnName || null != null) {
+                            if (setEdit) {
+                                columnsItems.push(<td>{<TextBoxControl  ref={this.props.columns[c].columnName + '_' + index} placeholder={this.props.columns[c].placeholder} value={eval('this.state.data[index].' + this.props.columns[c].columnName)} />}</td>);
+                            } else {
+                                columnsItems.push(<td>{eval('this.state.data[index].' + this.props.columns[c].columnName)}</td>);
+                            }
+                        }
+                    }
+                    var commandColumn = [];
+                    var commandButton = [];
+                    if (this.props.isEdit) {
+                        if (setEdit) {
+                            commandButton.push(<ButtonControl text='ปรับปรุง' onClick={this.handleEditItem.bind(this, this.state.data[index]._id)} />);
+                            commandButton.push(<ButtonControl text='ยกเลิก' onClick={this.editForm.bind(this, index, setEdit)} />);
+                        } else {
+                            commandButton.push(<ButtonControl text='แก้ไข' onClick={this.editForm.bind(this, index, setEdit)} />);
+                        }
+                    }
+                    if (this.props.isDelete && !setEdit) {
+                        commandButton.push(<ButtonControl text='ลบ' onClick={this.handleDeleteItem.bind(this, this.state.data[index]._id)} />);
+                    }
+                    if (commandButton.length > 0) {
+                        commandColumn.push(<td className='text-center'>{commandButton}</td>);
+                    }
+                    rowsItems.push(<tr>{columnsItems}{commandColumn}</tr>);
+                }
+                return <tbody>{rowAdd}{rowsItems}</tbody>;
+            }
+        });
+
+        var TableData = React.createClass({
+            render: function() {
+                var caption = this.props.config[0].caption || '';
+                if (caption != '') {
+                    caption = <caption className='text-center'><h4>{this.props.config[0].caption}</h4></caption>;
+                }
+                return <table className='table table-bordered table-hover'>
+                        {caption}
+						<TableDataHeader columns={this.props.config[0].columns} />
+                        <TableDataItem
+                            columns={this.props.config[0].columns}
+                            source={this.props.config[0].source}
+                            isAdd={this.props.config[0].isEditable}
+                            isEdit={this.props.config[0].isEditable}
+                            isDelete={this.props.config[0].isEditable}
+                            selectApi={this.props.config[0].selectApi}
+                            insertApi={this.props.config[0].insertApi}
+                            updateApi={this.props.config[0].updateApi}
+                            deleteApi={this.props.config[0].deleteApi}
+                            confirmInsert={this.props.config[0].confirmInsert}
+                            confirmUpdate={this.props.config[0].confirmUpdate}
+                            confirmDelete={this.props.config[0].confirmDelete} />
+                       </table>;
+            }
+        });
+
+        //########## Config Table ##########
+        var columns = [{
+            headerText: '#'
+        }, {
+            headerText: 'ชื่อ',
+            columnName: 'name',
+            placeholder: 'กรุณากรอกชื่อ'
+        }, {
+            headerText: 'นามสกุล',
+            columnName: 'surname',
+            placeholder: 'กรุณากรอกนามสกุล'
+        }, {
+            headerText: 'อีเมล',
+            columnName: 'email',
+            placeholder: 'กรุณากรอกอีเมล'
+        }, {
+            headerText: 'เพิ่ม/แก้ไข/ลบ'
+        }];
+
+        var tableConfig = [{
+            caption: 'Customer Management',
+            columns: columns,
+            source: [],
+            isEditable: true,
+            selectApi: 'http://localhost:8080/api/users',
+            insertApi: 'http://localhost:8080/api/users',
+            updateApi: 'http://localhost:8080/api/users',
+            deleteApi: 'http://localhost:8080/api/users',
+            confirmInsert: 'ยืนยันการเพิ่มข้อมูล',
+            confirmUpdate: 'ยืนยันการปรับปรุงข้อมูล',
+            confirmDelete: 'ยืนยันการลบข้อมูล'
+        }];
+        //##################################
+
+        ReactDOM.render(
+            <TableData config={tableConfig} />, document.getElementById('container')
+        );
+    </script>
+</body>
+</html>
